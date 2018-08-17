@@ -48,6 +48,7 @@ module.exports = {
                             value: {
                               id:  project.id,
                               toolKey: project.toolKey,
+                              name: project.name,
                             },
                             short: project.name
                         }
