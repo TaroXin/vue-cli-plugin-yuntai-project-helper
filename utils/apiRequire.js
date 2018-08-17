@@ -13,50 +13,50 @@ function generateCookie (cookies) {
 
 module.exports = {
     getApiGroup (done, answer, cookies) {
-        request
-            .get(neiUrls.progroupsApi)
-            .query('recent', '')
-            .set(cookies.base_headers)
-            .set('Cookie', generateCookie(cookies.cookies))
-            .end((err, res) => {
-                if (res.body.code === 200) {
-                    done(null, res.body.result.map(progroup => {
-                        return {
-                            name: progroup.name,
-                            value: progroup.id,
-                            short: progroup.name
-                        }
-                    }))
-                } else {
-                    done(res.body.message)
-                }
-            })
+      request
+        .get(neiUrls.progroupsApi)
+        .query('recent', '')
+        .set(cookies.base_headers)
+        .set('Cookie', generateCookie(cookies.cookies))
+        .end((err, res) => {
+          if (res.body.code === 200) {
+            done(null, res.body.result.map(progroup => {
+              return {
+                name: progroup.name,
+                value: progroup.id,
+                short: progroup.name
+              }
+            }))
+          } else {
+            done(res.body.message)
+          }
+        })
     },
 
     getApiGroupDetail (done, answer, cookies) {
-        let apiGroup = answer.apiGroup
+      let apiGroup = answer.apiGroup
 
-        request
-            .get(neiUrls.progroupsApi + apiGroup)
-            .set(cookies.base_headers)
-            .set('Cookie', generateCookie(cookies.cookies))
-            .end((err, res) => {
-                if (res.body.code === 200) {
-                    done(null, res.body.result.projects.map(project => {
-                        return {
-                            name: project.name,
-                            value: {
-                              id:  project.id,
-                              toolKey: project.toolKey,
-                              name: project.name,
-                            },
-                            short: project.name
-                        }
-                    }))
-                } else {
-                    done(res.body.message)
-                }
-            })
+      request
+        .get(neiUrls.progroupsApi + apiGroup)
+        .set(cookies.base_headers)
+        .set('Cookie', generateCookie(cookies.cookies))
+        .end((err, res) => {
+          if (res.body.code === 200) {
+            done(null, res.body.result.projects.map(project => {
+              return {
+                name: project.name,
+                value: {
+                  id:  project.id,
+                  toolKey: project.toolKey,
+                  name: project.name,
+                },
+                short: project.name
+              }
+            }))
+          } else {
+            done(res.body.message)
+          }
+        })
     },
 
     getApiInterface (done, answer, cookies) {

@@ -7,25 +7,22 @@ const signale = require('signale')
 const apiRequire = require('../utils/apiRequire')
 const downloadUrl = 'http://NeiDebug.youcaihua.net:8081/Nei/GenCode?key='
 const filePaths = {
-  cookiePath: path.resolve('.', '.neicookie'),
-  downloadPath: path.resolve('.', 'api/'),
-  compressPath: path.resolve('.', 'api/cache'),
+  configPath: path.resolve('.', '.yuntaiconfig'),
+  downloadPath: '',
+  compressPath: '',
   filename: '/cache.zip',
 }
+const yuntaiConfig = JSON.parse(fs.readFileSync(filePaths.configPath, { encoding: 'utf-8' }))
 let userAnswer = null
 
 module.exports = (api, projectOptions, args) => {
-  const result = fs.readFileSync(filePaths.cookiePath, { encoding: 'utf-8' })
-  const neiCookie = JSON.parse(result)
-  signale.pending('加载API列表...')
-
-  inquirer.prompt([{
+  const prompts = [{
     name: 'apiGroup',
     message: '请选择API分组',
     type: 'list',
     choices: function (answer) {
       const done = this.async()
-      apiRequire.getApiGroup(done, answer, neiCookie)
+      apiRequire.getApiGroup(done, answer, yuntaiConfig)
     }
   }, {
     name: 'apiGroupDetail',
@@ -33,7 +30,7 @@ module.exports = (api, projectOptions, args) => {
     type: 'list',
     choices: function (answer) {
       const done = this.async()
-      apiRequire.getApiGroupDetail(done, answer, neiCookie)
+      apiRequire.getApiGroupDetail(done, answer, yuntaiConfig)
     }
   }, {
     name: 'apiInterfaceGroup',
@@ -41,25 +38,98 @@ module.exports = (api, projectOptions, args) => {
     type: 'checkbox',
     choices: function (answer) {
       const done = this.async()
-      apiRequire.getApiInterface(done, answer, neiCookie)
+      apiRequire.getApiInterface(done, answer, yuntaiConfig)
     }
-  }]).then(answer => {
+  }]
+
+  // 判断这里是不是第一次进来，判断依据是当前没有apiPath的下载地址
+  if (!yuntaiConfig.paths.apiPath) {
+    prompts.unshift({
+      name: 'createApiPath',
+      when: answer => {
+        if (answer.apiPath.startsWith('/')) {
+          answer.apiPath = answer.apiPath.substring(1)
+        }
+        return !fs.existsSync(path.resolve('.', answer.apiPath))
+      },
+      message: '目录不存在, 是否创建?',
+      type: 'confirm',
+      default: true,
+    })
+
+    prompts.unshift({
+      name: 'apiPath',
+      message: '当前第一次使用build-api工具，请设置api的下载路径',
+      type: 'input',
+    })
+  }
+
+  signale.pending('加载API列表...')
+  inquirer.prompt(prompts).then(answer => {
     userAnswer = answer
     signale.success('选择完成，准备下载...')
     if (answer.apiInterfaceGroup.length === 0) {
       signale.success('未选择项目，执行成功')
     } else {
-      download()
+      if (yuntaiConfig.paths.apiPath) {
+        filePaths.downloadPath = path.resolve('.', yuntaiConfig.paths.apiPath)
+        filePaths.compressPath = filePaths.downloadPath + '/cache'
+        download()
+      } else {
+        resolveApiPath()
+      }
     }
   })
 }
 
-function download (answer) {
+// 创建目录
+function resolveApiPath () {
+  signale.info('第一次执行，保存api下载路径')
+  const apiPath = path.resolve('.', userAnswer.apiPath)
+  if (fs.existsSync(apiPath)) {
+    saveApiPath(userAnswer.apiPath)
+    download()
+    return
+  }
+
+  if (!fs.existsSync(apiPath) && userAnswer.createApiPath) {
+    createApiPath(apiPath, apiPath)
+    saveApiPath(userAnswer.apiPath)
+    download()
+  } else {
+    signale.error('目标目录不存在')
+  }
+}
+
+function createApiPath (apiPath, origin) {
+  // 创建对应的文件夹
+  const isExistParent = fs.existsSync(path.dirname(apiPath))
+  if (isExistParent) {
+    fs.mkdirSync(apiPath)
+    if (apiPath !== origin) {
+      createApiPath(origin, origin)
+    }
+  } else {
+    createApiPath(path.dirname(apiPath), origin)
+  }
+}
+
+function saveApiPath (apiPath) {
+  // 修改 当前环境中的 apiPath
+  yuntaiConfig.paths.apiPath = apiPath
+  filePaths.downloadPath = path.resolve('.', yuntaiConfig.paths.apiPath)
+  filePaths.compressPath = filePaths.downloadPath + '/cache'
+  // 修改 .yuntaiconfig 文件中的 apiPath
+  fs.writeFileSync(filePaths.configPath, JSON.stringify(yuntaiConfig))
+}
+
+// 下载文件
+function download () {
   let { apiInterfaceGroup, apiGroupDetail } = userAnswer
 
   if (!fs.existsSync(filePaths.downloadPath)) {
     signale.info('cache目录不存在，创建目录')
-    fs.mkdirSync(filePaths.downloadPath)
+    createApiPath(filePaths.downloadPath, filePaths.downloadPath)
   } else {
     signale.info('cache目录存在，删除目录')
     rmCacheDir(filePaths.compressPath)
@@ -68,7 +138,8 @@ function download (answer) {
   signale.info('下载地址: ' + downloadUrl + apiGroupDetail.toolKey)
   let file = fs.createWriteStream(filePaths.downloadPath + filePaths.filename);
 
-  signale.pending('下载中...')
+  let interactive = new signale.Signale({interactive: true, scope: 'download'})
+  interactive.await('正在下载')
   http.get(downloadUrl + apiGroupDetail.toolKey, function (res) {
     res.on('data', data => {
       file.write(data);
@@ -80,20 +151,22 @@ function download (answer) {
 
     res.on('end', _ => {
       file.end();
-      signale.success('Zip文件下载成功, 准备解压')
+      interactive.success('文件下载成功, 准备解压')
+      interactive = null
       unzipCache(filePaths.downloadPath + filePaths.filename)
     })
   })
 }
 
 function unzipCache (path) {
-  signale.pending('解压中...')
+  let interactive = new signale.Signale({interactive: true, scope: 'unzip'})
+  interactive.await('准备解压')
   compressing.zip.uncompress(path, filePaths.compressPath).then(_ => {
-    signale.success('解压成功')
+    interactive.success('解压成功')
     rmCacheFile()
     resolveFiles()
   }).catch(err => {
-    signale.error(err)
+    interactive.error(err)
   })
 }
 
@@ -112,42 +185,51 @@ function resolveFiles () {
       signale.error('不存在目标文件，停止执行')
       rmCacheDir(filePaths.compressPath)
       signale.success('删除缓存文件夹成功')
+      exit()
     }
   } else {
     signale.error('不存在目标文件，停止执行')
     rmCacheDir(filePaths.compressPath)
     signale.success('删除缓存文件夹成功')
+    exit()
   }
 }
 
 // 获取当前选择的文件与已经存在的文件进行合并
 function mergeSelectedFiles (targetDirName) {
+  const interactive = new signale.Signale({interactive: true, scope: 'merge'})
   let { apiInterfaceGroup } = userAnswer
   // signale.info(apiInterfaceGroup)
-  signale.pending('准备合并文件')
+  interactive.await('准备合并文件')
   apiInterfaceGroup.forEach(interfaceName => {
     let source = filePaths.compressPath + '/RPC_JS/v1/' + targetDirName + '/ES6_' + interfaceName + '.js'
-    let target = filePaths.downloadPath + '/' + interfaceName + '.js'
-    mergeFile(target, source)
+    if (fs.existsSync(source)) {
+      let target = filePaths.downloadPath + '/' + interfaceName + '.js'
+      mergeFile(target, source)
+    } else {
+      interactive.error('预设文件地址' + source + '不存在, 跳过执行')
+    }
   })
+  interactive.success('合并完成')
 
   rmCacheDir(filePaths.compressPath)
   signale.success('执行成功, 完成!')
+  exit()
 }
 
 // 合并文件
 function mergeFile (target, source) {
-  if (!fs.existsSync(target)) {
-    signale.info('目标不存在, 执行copy')
-    fs.copyFileSync(source, target)
-  } else {
-    signale.info('目标存在, 执行merge')
-  }
+  fs.copyFileSync(source, target)
+  // if (!fs.existsSync(target)) {
+  //   signale.info('目标不存在, 执行copy')
+  //   fs.copyFileSync(source, target)
+  // } else {
+  //   signale.info('目标存在, 执行merge')
+  // }
 }
 
 function rmCacheFile () {
   fs.unlinkSync(filePaths.downloadPath + filePaths.filename)
-  signale.success('缓存Zip文件删除成功')
 }
 
 function rmCacheDir (path) {
@@ -164,4 +246,8 @@ function rmCacheDir (path) {
     });
     fs.rmdirSync(path);
   }
+}
+
+function exit () {
+  process.exit()
 }
