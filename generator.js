@@ -7,6 +7,7 @@ module.exports = (api, options, rootOptions) => {
     scripts: {
       'build:api': 'vue-cli-service nei-api-get',
       'update:api': 'vue-cli-service nei-api-update',
+      'build:icon': 'vue-cli-service icon-get'
     }
   })
 
