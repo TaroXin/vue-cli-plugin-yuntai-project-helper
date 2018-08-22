@@ -61,10 +61,12 @@ module.exports = {
     },
 
     getApiInterface (done, answer, cookies) {
+      let { apiGroupDetail } = answer
+
       request
-        .get(neiUrls.iconGroupApi + 't=' + Date.now() + '&ctoken=' + cookies.api_cookies.ctoken)
-        .set(cookies.api_base_headers)
-        .set('Cookie', generateCookie(cookies.api_cookies))
+        .get(neiUrls.interfaceApi + apiGroupDetail.id)
+        .set(cookies.base_headers)
+        .set('Cookie', generateCookie(cookies.cookies))
         .end((err, res) => {
           if (res.body.code === 200) {
             const interfaceGroup = []
@@ -87,27 +89,34 @@ module.exports = {
     },
 
     getIconGroup (done, answer, cookies) {
+      let { iconCtoken } = answer
+
       request
-        .get(neiUrls.interfaceApi + apiGroupDetail.id)
-        .set(cookies.base_headers)
-        .set('Cookie', generateCookie(cookies.cookies))
+        .get(neiUrls.iconGroupApi + 't=' + Date.now() + '&ctoken=' + cookies.api_cookies.ctoken)
+        .set(cookies.api_base_headers)
+        .set('Cookie', generateCookie(cookies.api_cookies))
         .end((err, res) => {
-          if (res.body.code === 200) {
-            const interfaceGroup = []
-            res.body.result.forEach(interface => {
-              const hasGroup = interfaceGroup.some(item => item.groupId === interface.groupId)
-              if (!hasGroup) {
-                interfaceGroup.push({
-                  name: `${interface.group.name} (${interface.className})`,
-                  value: interface.className,
-                  short: `${interface.group.name} (${interface.className})`,
-                  groupId: interface.groupId
-                })
-              }
+          if (res.status === 200 && res.body.code === 200) {
+            const iconGroup = []
+            res.body.data.corpProjects.forEach(item => {
+              iconGroup.push({
+                name: item.name,
+                value: item.id,
+                short: item.name,
+              })
             })
-            done(null, interfaceGroup)
+
+            res.body.data.ownProjects.forEach(item => {
+              iconGroup.push({
+                name: item.name,
+                value: item.id,
+                short: item.name,
+              })
+            })
+
+            done(null, iconGroup)
           } else {
-            done(res.body.message)
+            done('接口请求错误，请检查所配置参数有没有问题')
           }
         })
     }
