@@ -208,7 +208,7 @@ function saveIconPath (iconPath) {
   filePaths.downloadPath = path.resolve('.', yuntaiConfig.paths.iconPath)
   filePaths.compressPath = filePaths.downloadPath + '/cache'
   // 修改 .yuntaiconfig 文件中的 apiPath
-  fs.writeFileSync(filePaths.configPath, JSON.stringify(yuntaiConfig))
+  fs.writeFileSync(filePaths.configPath, JSON.stringify(yuntaiConfig, null, 2))
 }
 
 function rmCacheFile () {

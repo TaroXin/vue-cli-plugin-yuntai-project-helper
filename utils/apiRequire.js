@@ -71,14 +71,22 @@ module.exports = {
           if (res.body.code === 200) {
             const interfaceGroup = []
             res.body.result.forEach(interface => {
-              const hasGroup = interfaceGroup.some(item => item.groupId === interface.groupId)
-              if (!hasGroup) {
+              const group = interfaceGroup.find(item => item.groupId === interface.groupId)
+              if (!group) {
                 interfaceGroup.push({
                   name: `${interface.group.name} (${interface.className})`,
-                  value: interface.className,
+                  value: {
+                    name: interface.className,
+                    id: interface.groupId,
+                    children: [
+                      interface.id
+                    ]
+                  },
                   short: `${interface.group.name} (${interface.className})`,
                   groupId: interface.groupId
                 })
+              } else {
+                group.value.children.push(interface.id)
               }
             })
             done(null, interfaceGroup)

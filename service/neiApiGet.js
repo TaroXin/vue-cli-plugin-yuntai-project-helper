@@ -2,6 +2,7 @@ const fs = require('fs')
 const path = require('path')
 const inquirer = require('inquirer')
 const http = require('http')
+const request = require('superagent')
 const compressing = require('compressing')
 const signale = require('signale')
 const apiRequire = require('../utils/apiRequire')
@@ -12,11 +13,27 @@ const filePaths = {
   compressPath: '',
   filename: '/cache.zip',
 }
+const neiUrls = {
+  interfaceApi: 'https://nei.netease.com/api/interfaces/',
+}
+
 const yuntaiConfig = JSON.parse(fs.readFileSync(filePaths.configPath, { encoding: 'utf-8' }))
 let userAnswer = null
 
 module.exports = (api, projectOptions, args) => {
   const prompts = [{
+    name: 'apiDownloadPath',
+    message: '重新指定下载路径请输入, 否则请点击回车: ',
+    type: 'input',
+  }, {
+    name: 'apiTarget',
+    message: '请选择API生成策略',
+    type: 'list',
+    choices: [
+      'Class',
+      'Object'
+    ],
+  }, {
     name: 'apiGroup',
     message: '请选择API分组',
     type: 'list',
@@ -120,12 +137,19 @@ function saveApiPath (apiPath) {
   filePaths.downloadPath = path.resolve('.', yuntaiConfig.paths.apiPath)
   filePaths.compressPath = filePaths.downloadPath + '/cache'
   // 修改 .yuntaiconfig 文件中的 apiPath
-  fs.writeFileSync(filePaths.configPath, JSON.stringify(yuntaiConfig))
+  fs.writeFileSync(filePaths.configPath, JSON.stringify(yuntaiConfig, null, 2))
 }
 
 // 下载文件
 function download () {
-  let { apiInterfaceGroup, apiGroupDetail } = userAnswer
+  let { apiInterfaceGroup, apiGroupDetail, apiDownloadPath } = userAnswer
+  // 重新定义 downloadPaht
+  if (apiDownloadPath) {
+    filePaths.downloadPath = apiDownloadPath
+    if (!fs.existsSync(apiDownloadPath)) {
+      createApiPath(apiDownloadPath, apiDownloadPath)
+    }
+  }
 
   if (!fs.existsSync(filePaths.downloadPath)) {
     signale.info('cache目录不存在，创建目录')
@@ -135,27 +159,35 @@ function download () {
     rmCacheDir(filePaths.compressPath)
   }
 
-  signale.info('下载地址: ' + downloadUrl + apiGroupDetail.toolKey)
-  let file = fs.createWriteStream(filePaths.downloadPath + filePaths.filename);
+  if (userAnswer.apiTarget === 'Class') {
+    // 生成传统的 Class 格式
+    signale.info('下载地址: ' + downloadUrl + apiGroupDetail.toolKey)
+    let file = fs.createWriteStream(filePaths.downloadPath + filePaths.filename);
 
-  let interactive = new signale.Signale({interactive: true, scope: 'download'})
-  interactive.await('正在下载')
-  http.get(downloadUrl + apiGroupDetail.toolKey, function (res) {
-    res.on('data', data => {
-      file.write(data);
-    });
+    let interactive = new signale.Signale({interactive: true, scope: 'download'})
+    interactive.await('正在下载')
+    http.get(downloadUrl + apiGroupDetail.toolKey, function (res) {
+      res.on('data', data => {
+        file.write(data);
+      });
 
-    res.on('progress', data => {
-      console.log(data)
+      res.on('progress', data => {
+        console.log(data)
+      })
+
+      res.on('end', _ => {
+        file.end();
+        interactive.success('文件下载成功, 准备解压')
+        interactive = null
+        unzipCache(filePaths.downloadPath + filePaths.filename)
+      })
     })
-
-    res.on('end', _ => {
-      file.end();
-      interactive.success('文件下载成功, 准备解压')
-      interactive = null
-      unzipCache(filePaths.downloadPath + filePaths.filename)
-    })
-  })
+  } else if (userAnswer.apiTarget === 'Object') {
+    // 生成最新的 Object 格式
+    generateObjectTargetApi()
+  } else {
+    signale.error('暂时不支持该格式下载')
+  }
 }
 
 function unzipCache (path) {
@@ -201,7 +233,8 @@ function mergeSelectedFiles (targetDirName) {
   let { apiInterfaceGroup } = userAnswer
   // signale.info(apiInterfaceGroup)
   interactive.await('准备合并文件')
-  apiInterfaceGroup.forEach(interfaceName => {
+  apiInterfaceGroup.forEach(interfaceGroup => {
+    let interfaceName = interfaceGroup.name
     let source = filePaths.compressPath + '/RPC_JS/v1/' + targetDirName + '/ES6_' + interfaceName + '.js'
     if (fs.existsSync(source)) {
       let target = filePaths.downloadPath + '/' + interfaceName + '.js'
@@ -246,6 +279,80 @@ function rmCacheDir (path) {
     });
     fs.rmdirSync(path);
   }
+}
+
+// 生成最新版本 Object 格式
+function generateObjectTargetApi () {
+  signale.info('Object格式Api生成策略')
+  userAnswer.apiInterfaceGroup.forEach(group => {
+    let { name, id, children } = group
+    let fileContent = 'export default [$REPLACE];\n'
+    let childLength = children.length
+    let currentSuccessLen = 0
+    let childrenObjects = []
+    children.forEach(childId => {
+      let childContent = ''
+      request
+        .get(neiUrls.interfaceApi + childId)
+        .set(yuntaiConfig.base_headers)
+        .set('Cookie', generateCookie(yuntaiConfig.cookies))
+        .end((err, res) => {
+          let result = res.body.result
+          if (res.body.code === 200) {
+            let name = result.path.substring(result.path.lastIndexOf('/') + 1)
+            name = name.substring(0, 1).toLowerCase() + name.substring(1)
+            let params = result.params.inputs.map(param => {
+              return `\n    ${param.name}: ${!!param.defaultValue ? param.defaultValue : null}, // required: ${!!param.required} typeName: ${param.typeName} desc: ${param.description}`
+            })
+            let paramsStr = ''
+            params.forEach(param => {
+              paramsStr += param
+            })
+
+            childContent += '{\n' +
+              `  name: '${name}',\n` +
+              `  method: '${result.method}',\n` +
+              `  desc: '${result.description || result.name}',\n` +
+              `  path: '${result.path}',\n` +
+              `  mockPath: '${result.path}',\n` +
+              `  params: {${paramsStr}\n  }\n` +
+              `}`
+            childrenObjects.push(childContent)
+          } else {
+            signale.error('获取失败，name:' + name)
+          }
+
+          currentSuccessLen += 1
+          if (currentSuccessLen === childLength) {
+            generateObjectTargetFile(name, fileContent, childrenObjects)
+          }
+        })
+    });
+  })
+}
+
+function generateObjectTargetFile (name, content, children) {
+  signale.info(name + '文件请求完成, 准备生成文件...')
+  let childContent = ''
+  children.forEach(child => {
+    childContent += child + ', '
+  })
+  childContent = childContent.substring(0, childContent.lastIndexOf(','))
+
+  content = content.replace('$REPLACE', childContent)
+  let target = filePaths.downloadPath + '/' + name + '.js'
+  if (fs.existsSync(target)) {
+    fs.unlinkSync(target)
+  }
+
+  fs.writeFileSync(target, content)
+  signale.success(name + '.js 写入完成')
+}
+
+function generateCookie (cookies) {
+  return Object.keys(cookies).map(key => {
+      return key + '=' + cookies[key]
+  }).join('; ')
 }
 
 function exit () {
