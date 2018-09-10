@@ -23,7 +23,7 @@ let userAnswer = null
 module.exports = (api, projectOptions, args) => {
   const prompts = [{
     name: 'apiDownloadPath',
-    message: '重新指定下载路径请输入, 否则请点击回车: ',
+    message: `重新指定下载路径请输入, 否则请点击回车${yuntaiConfig.paths.apiPath ? '(' + yuntaiConfig.paths.apiPath + ')' : ''}: `,
     type: 'input',
   }, {
     name: 'apiTarget',
