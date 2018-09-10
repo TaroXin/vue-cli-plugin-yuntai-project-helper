@@ -302,7 +302,7 @@ function generateObjectTargetApi () {
             let name = result.path.substring(result.path.lastIndexOf('/') + 1)
             name = name.substring(0, 1).toLowerCase() + name.substring(1)
             let params = result.params.inputs.map(param => {
-              return `\n    ${param.name}: ${!!param.defaultValue ? param.defaultValue : null}, // required: ${!!param.required} typeName: ${param.typeName} desc: ${param.description}`
+              return `\n    ${param.name}: ${!!param.required}, // typeName: ${param.typeName}  desc:${' ' + param.description}`
             })
             let paramsStr = ''
             params.forEach(param => {
@@ -315,7 +315,7 @@ function generateObjectTargetApi () {
               `  desc: '${result.description || result.name}',\n` +
               `  path: '${result.path}',\n` +
               `  mockPath: '${result.path}',\n` +
-              `  params: {${paramsStr}\n  }\n` +
+              `  params: {${paramsStr}\n  },\n` +
               `}`
             childrenObjects.push(childContent)
           } else {
@@ -333,6 +333,7 @@ function generateObjectTargetApi () {
 
 function generateObjectTargetFile (name, content, children) {
   signale.info(name + '文件请求完成, 准备生成文件...')
+  name = name.substring(0, 1).toLowerCase() + name.substring(1)
   let childContent = ''
   children.forEach(child => {
     childContent += child + ', '
