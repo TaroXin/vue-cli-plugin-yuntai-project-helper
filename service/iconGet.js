@@ -190,6 +190,7 @@ function formatIconCss (iconCssPath) {
   let content = fs.readFileSync(iconCssPath).toString()
   let needReplace = content.substring(0, content.indexOf('}', 200) + 2)
   let replaceStr =
+    `/* stylelint-disable */\n` +
     `@font-face {\n` +
     `  font-family: "iconfont";\n` +
     `  src: ${needReplace.substring(needReplace.indexOf("url('iconfont.ttf"), needReplace.indexOf("format('truetype')") + 18)};\n` +
