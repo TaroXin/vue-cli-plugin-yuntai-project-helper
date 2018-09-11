@@ -173,7 +173,7 @@ function mergeSelectedFiles () {
   })
 
   if (userAnswer.iconTarget === 'css') {
-    formatIconCss(filePaths.downloadPath + '/.iconfont.css')
+    formatIconCss(filePaths.downloadPath + '/iconfont.css')
   }
 
   generateIconJson(sourceFiles[sourceFiles.length - 1], filePaths.downloadPath)
@@ -187,9 +187,16 @@ function mergeSelectedFiles () {
 
 function formatIconCss (iconCssPath) {
   iconCssPath = path.resolve('.', iconCssPath)
-  let content = fs.readFileSync(iconCssPath)
-  let needReplace = content.substring(0, content.indexOf('}', 200))
-  console.log(needReplace)
+  let content = fs.readFileSync(iconCssPath).toString()
+  let needReplace = content.substring(0, content.indexOf('}', 200) + 2)
+  let replaceStr =
+    `@font-face {\n` +
+    `  font-family: "iconfont";\n` +
+    `  src: ${needReplace.substring(needReplace.indexOf("url('iconfont.ttf"), needReplace.indexOf("format('truetype')") + 18)};\n` +
+    `}\n`
+
+  content = content.replace(needReplace, replaceStr)
+  fs.writeFileSync(iconCssPath, content)
 }
 
 function generateIconJson (iconPath, parent) {
@@ -272,11 +279,8 @@ function saveIconPath (iconPath) {
     filePaths.downloadPath = path.resolve('.', yuntaiConfig.paths.svgPath)
   }
 
-  if (!yuntaiConfig.api_cookies.EGG_SESS_ICONFONT) {
-    yuntaiConfig.api_cookies.EGG_SESS_ICONFONT = userAnswer.iconSession
-    yuntaiConfig.api_cookies.ctoken = userAnswer.iconCtoken
-  }
-
+  yuntaiConfig.api_cookies.EGG_SESS_ICONFONT = userAnswer.iconSession || yuntaiConfig.api_cookies.EGG_SESS_ICONFONT
+  yuntaiConfig.api_cookies.ctoken = userAnswer.iconCtoken || yuntaiConfig.api_cookies.ctoken
   filePaths.compressPath = filePaths.downloadPath + '/cache'
   // 修改 .yuntaiconfig 文件中的 apiPath
   fs.writeFileSync(filePaths.configPath, JSON.stringify(yuntaiConfig, null, 2))
