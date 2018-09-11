@@ -172,6 +172,10 @@ function mergeSelectedFiles () {
     }
   })
 
+  if (userAnswer.iconTarget === 'css') {
+    formatIconCss(filePaths.downloadPath + '/.iconfont.css')
+  }
+
   generateIconJson(sourceFiles[sourceFiles.length - 1], filePaths.downloadPath)
 
   interactive.success('合并完成')
@@ -181,13 +185,21 @@ function mergeSelectedFiles () {
   exit()
 }
 
+function formatIconCss (iconCssPath) {
+  iconCssPath = path.resolve('.', iconCssPath)
+  let content = fs.readFileSync(iconCssPath)
+  let needReplace = content.substring(0, content.indexOf('}', 200))
+  console.log(needReplace)
+}
+
 function generateIconJson (iconPath, parent) {
   let html = path.resolve('.', parent + '/' + iconPath)
-  let $ = cheerio.load(fs.readSync(html))
+  let options = { decodeEntities: false }
+  let $ = cheerio.load(fs.readFileSync(html), options)
   let iconList = $('.icon_lists').eq(0).find('li')
-  let iconContent = `export default [$REPLACE]`
-  let iconObjects = '';
-  iconList.each((element, index) => {
+  let iconContent = `export default [$REPLACE];\n`
+  let iconObjects = []
+  iconList.each((index, element) => {
     iconObjects.push(
       `{\n` +
       `  name: '${$(element).find('.name').eq(0).html()}',\n` +
@@ -196,7 +208,7 @@ function generateIconJson (iconPath, parent) {
     )
   })
 
-  let replaceStr
+  let replaceStr = ''
   iconObjects.forEach(content => {
     replaceStr += content + ', '
   })
@@ -260,8 +272,10 @@ function saveIconPath (iconPath) {
     filePaths.downloadPath = path.resolve('.', yuntaiConfig.paths.svgPath)
   }
 
-  yuntaiConfig.api_cookies.EGG_SESS_ICONFONT = userAnswer.iconSession
-  yuntaiConfig.api_cookies.ctoken = userAnswer.iconCtoken
+  if (!yuntaiConfig.api_cookies.EGG_SESS_ICONFONT) {
+    yuntaiConfig.api_cookies.EGG_SESS_ICONFONT = userAnswer.iconSession
+    yuntaiConfig.api_cookies.ctoken = userAnswer.iconCtoken
+  }
 
   filePaths.compressPath = filePaths.downloadPath + '/cache'
   // 修改 .yuntaiconfig 文件中的 apiPath
