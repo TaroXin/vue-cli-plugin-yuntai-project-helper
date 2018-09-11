@@ -181,8 +181,8 @@ function mergeSelectedFiles () {
   exit()
 }
 
-function generateIconJson (path, parent) {
-  let html = parent + '/' + path
+function generateIconJson (iconPath, parent) {
+  let html = path.resolve('.', parent + '/' + iconPath)
   let $ = cheerio.load(fs.readSync(html))
   let iconList = $('.icon_lists').eq(0).find('li')
   let iconContent = `export default [$REPLACE]`
@@ -212,8 +212,8 @@ function mergeFile (target, source) {
 
 function resolveIconPath () {
   signale.info('第一次执行，保存icon下载路径')
-  const iconPath
-  const pathStr
+  let iconPath
+  let pathStr
   if (userAnswer.iconTarget === 'css') {
     pathStr = userAnswer.iconPath
     iconPath = path.resolve('.', userAnswer.iconPath)
@@ -250,18 +250,18 @@ function createIconPath (apiPath, origin) {
   }
 }
 
-function saveIconPath (path) {
+function saveIconPath (iconPath) {
   // 修改 当前环境中的 apiPath
   if (userAnswer.iconTarget === 'css') {
     yuntaiConfig.paths.iconPath = iconPath
     filePaths.downloadPath = path.resolve('.', yuntaiConfig.paths.iconPath)
   } else {
-    yuntaiConfig.paths.svgPath = svgPath
+    yuntaiConfig.paths.svgPath = iconPath
     filePaths.downloadPath = path.resolve('.', yuntaiConfig.paths.svgPath)
   }
 
   yuntaiConfig.api_cookies.EGG_SESS_ICONFONT = userAnswer.iconSession
-  yuntaiConfig.api_cookies.ctoken = userAnswer.ctoken
+  yuntaiConfig.api_cookies.ctoken = userAnswer.iconCtoken
 
   filePaths.compressPath = filePaths.downloadPath + '/cache'
   // 修改 .yuntaiconfig 文件中的 apiPath
