@@ -30,6 +30,7 @@
   "paths": {
     "apiPath": "",
     "iconPath": "",
+    "svgPath": "",
     "modulePath": ""
   }
 }

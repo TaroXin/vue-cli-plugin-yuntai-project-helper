@@ -1,6 +1,6 @@
 {
   "name": "vue-cli-plugin-yuntai-project-helper",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "油菜花芸苔项目生成帮助插件",
   "main": "index.js",
   "author": "YangXin",
@@ -10,5 +10,8 @@
     "inquirer": "^6.1.0",
     "signale": "^1.2.1",
     "superagent": "^3.8.3"
+  },
+  "devDependencies": {
+    "cheerio": "^1.0.0-rc.2"
   }
 }

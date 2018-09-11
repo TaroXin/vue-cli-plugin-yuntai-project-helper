@@ -4,6 +4,7 @@ const http = require('http')
 const compressing = require('compressing')
 const signale = require('signale')
 const inquirer = require('inquirer')
+const cheerio = require('cheerio')
 const apiRequire = require('../utils/apiRequire')
 const filePaths = {
   configPath: path.resolve('.', '.yuntaiconfig'),
@@ -31,27 +32,25 @@ module.exports = (api, projectOptions, args) => {
     }
   }]
 
-  // 第一次使用icon下载命令
-  if (!yuntaiConfig.paths.iconPath) {
-    prompts.unshift({
-      name: 'createIconPath',
-      when: answer => {
-        if (answer.iconPath.startsWith('/')) {
-          answer.iconPath = answer.iconPath.substring(1)
-        }
-        return !fs.existsSync(path.resolve('.', answer.iconPath))
-      },
-      message: '目录不存在, 是否创建?',
-      type: 'confirm',
-      default: true,
-    })
+  prompts.unshift({
+    name: 'iconPath',
+    when: answer => {
+      return answer.iconTarget === 'css' && !yuntaiConfig.paths.iconPath
+    },
+    message: '当前第一次使用build-icon工具，请设置icon的下载路径',
+    type: 'input',
+  })
 
-    prompts.unshift({
-      name: 'iconPath',
-      message: '当前第一次使用build-icon工具，请设置icon的下载路径',
-      type: 'input',
-    })
+  prompts.unshift({
+    name: 'svgPath',
+    when: answer => {
+      return answer.iconTarget === 'svg' && !yuntaiConfig.paths.svgPath
+    },
+    message: '当前第一次使用build-icon工具，请设置svg的下载路径',
+    type: 'input',
+  })
 
+  if (!yuntaiConfig.api_cookies.EGG_SESS_ICONFONT) {
     prompts.unshift({
       name: 'iconCtoken',
       message: '第一次使用build-icon工具，需要配置iconfont.cn的ctoken数据',
@@ -65,12 +64,23 @@ module.exports = (api, projectOptions, args) => {
     })
   }
 
+  prompts.unshift({
+    name: 'iconTarget',
+    message: '请选择icon生成策略',
+    type: 'list',
+    choices: ['css', 'svg']
+  })
+
   signale.pending('加载API列表....')
   inquirer.prompt(prompts).then(answer => {
     userAnswer = answer
     signale.success('选择完成，准备下载...')
-    if (yuntaiConfig.paths.iconPath) {
+    if (userAnswer.iconTarget === 'css' && yuntaiConfig.paths.iconPath) {
       filePaths.downloadPath = path.resolve('.', yuntaiConfig.paths.iconPath)
+      filePaths.compressPath = filePaths.downloadPath + '/cache'
+      download()
+    } else if (userAnswer.iconTarget === 'svg' && yuntaiConfig.paths.svgPath) {
+      filePaths.downloadPath = path.resolve('.', yuntaiConfig.paths.svgPath)
       filePaths.compressPath = filePaths.downloadPath + '/cache'
       download()
     } else {
@@ -145,7 +155,12 @@ function mergeSelectedFiles () {
   const interactive = new signale.Signale({interactive: true, scope: 'merge'})
   interactive.await('准备合并文件')
   const sourceDir = fs.readdirSync(filePaths.compressPath)[0]
-  const sourceFiles = ['iconfont.css', 'iconfont.ttf', 'demo_fontclass.html']
+  let sourceFiles = null
+  if (userAnswer.iconTarget === 'css') {
+    sourceFiles = ['iconfont.css', 'iconfont.ttf', 'demo_fontclass.html']
+  } else if (userAnswer.iconTarget === 'svg') {
+    sourceFiles = ['iconfont.js', 'demo_symbol.html']
+  }
 
   sourceFiles.forEach(fileName => {
     let source = filePaths.compressPath + '/' + sourceDir + '/' + fileName
@@ -156,11 +171,38 @@ function mergeSelectedFiles () {
       interactive.error('预设文件地址' + source + '不存在, 跳过执行')
     }
   })
+
+  generateIconJson(sourceFiles[sourceFiles.length - 1], filePaths.downloadPath)
+
   interactive.success('合并完成')
 
   rmCacheDir(filePaths.compressPath)
   signale.success('执行成功, 完成!')
   exit()
+}
+
+function generateIconJson (path, parent) {
+  let html = parent + '/' + path
+  let $ = cheerio.load(fs.readSync(html))
+  let iconList = $('.icon_lists').eq(0).find('li')
+  let iconContent = `export default [$REPLACE]`
+  let iconObjects = '';
+  iconList.each((element, index) => {
+    iconObjects.push(
+      `{\n` +
+      `  name: '${$(element).find('.name').eq(0).html()}',\n` +
+      `  fontclass: '${$(element).find('.fontclass').eq(0).html()}',\n` +
+      `}`
+    )
+  })
+
+  let replaceStr
+  iconObjects.forEach(content => {
+    replaceStr += content + ', '
+  })
+  replaceStr = replaceStr.substring(0, replaceStr.lastIndexOf(','))
+  iconContent = iconContent.replace('$REPLACE', replaceStr)
+  fs.writeFileSync(parent + '/icons.js', iconContent)
 }
 
 // 合并文件
@@ -170,16 +212,25 @@ function mergeFile (target, source) {
 
 function resolveIconPath () {
   signale.info('第一次执行，保存icon下载路径')
-  const iconPath = path.resolve('.', userAnswer.iconPath)
+  const iconPath
+  const pathStr
+  if (userAnswer.iconTarget === 'css') {
+    pathStr = userAnswer.iconPath
+    iconPath = path.resolve('.', userAnswer.iconPath)
+  } else {
+    pathStr = userAnswer.svgPath
+    iconPath = path.resolve('.', userAnswer.svgPath)
+  }
+
   if (fs.existsSync(iconPath)) {
-    saveIconPath(userAnswer.iconPath)
+    saveIconPath(pathStr)
     download()
     return
   }
 
-  if (!fs.existsSync(iconPath) && userAnswer.createIconPath) {
+  if (!fs.existsSync(iconPath)) {
     createIconPath(iconPath, iconPath)
-    saveIconPath(userAnswer.iconPath)
+    saveIconPath(pathStr)
     download()
   } else {
     signale.error('目标目录不存在')
@@ -199,13 +250,19 @@ function createIconPath (apiPath, origin) {
   }
 }
 
-function saveIconPath (iconPath) {
+function saveIconPath (path) {
   // 修改 当前环境中的 apiPath
-  yuntaiConfig.paths.iconPath = iconPath
+  if (userAnswer.iconTarget === 'css') {
+    yuntaiConfig.paths.iconPath = iconPath
+    filePaths.downloadPath = path.resolve('.', yuntaiConfig.paths.iconPath)
+  } else {
+    yuntaiConfig.paths.svgPath = svgPath
+    filePaths.downloadPath = path.resolve('.', yuntaiConfig.paths.svgPath)
+  }
+
   yuntaiConfig.api_cookies.EGG_SESS_ICONFONT = userAnswer.iconSession
   yuntaiConfig.api_cookies.ctoken = userAnswer.ctoken
 
-  filePaths.downloadPath = path.resolve('.', yuntaiConfig.paths.iconPath)
   filePaths.compressPath = filePaths.downloadPath + '/cache'
   // 修改 .yuntaiconfig 文件中的 apiPath
   fs.writeFileSync(filePaths.configPath, JSON.stringify(yuntaiConfig, null, 2))
