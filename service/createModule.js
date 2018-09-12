@@ -97,7 +97,8 @@ function createModule () {
   let views = target + '/views'
   let index = target + '/index.js'
   let routes = target + '/routes.js'
-  let menu = target + '/routes.js'
+  let menu = target + '/menu.js'
+
   let indexContent = `import loadModuleData from '@/utils/load-module';\n\n` +
     `const service = loadModuleData(require.context('./', true, /\.js$/));\n\n` +
     `export default {\n` +
