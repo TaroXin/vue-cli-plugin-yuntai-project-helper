@@ -97,6 +97,7 @@ function createModule () {
   let views = target + '/views'
   let index = target + '/index.js'
   let routes = target + '/routes.js'
+  let menu = target + '/routes.js'
   let indexContent = `import loadModuleData from '@/utils/load-module';\n\n` +
     `const service = loadModuleData(require.context('./', true, /\.js$/));\n\n` +
     `export default {\n` +
@@ -106,6 +107,8 @@ function createModule () {
     `};\n`
 
   let routesContent = `export default [\n` + `];\n`
+
+  let menuContent = `export default [\n` + `];\n`
 
   if (fs.existsSync(target)) {
     signale.error('模块已经存在')
@@ -118,6 +121,7 @@ function createModule () {
     fs.mkdirSync(views)
     fs.writeFileSync(index, indexContent)
     fs.writeFileSync(routes, routesContent)
+    fs.writeFileSync(menu, menuContent)
     signale.success('创建成功')
   }
 }

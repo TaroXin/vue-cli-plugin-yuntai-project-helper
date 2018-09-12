@@ -1,6 +1,6 @@
 {
   "name": "vue-cli-plugin-yuntai-project-helper",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "油菜花芸苔项目生成帮助插件",
   "main": "index.js",
   "author": "YangXin",
