@@ -290,6 +290,7 @@ function generateObjectTargetApi () {
     let childLength = children.length
     let currentSuccessLen = 0
     let childrenObjects = []
+    let descObjects = []
     children.forEach(childId => {
       let childContent = ''
       request
@@ -309,10 +310,20 @@ function generateObjectTargetApi () {
               paramsStr += param
             })
 
+            // 在这里对描述进行判断，如果描述过长，则进行省略的写法
+            let desc = result.description
+            if (desc.split('\r\n').length >= 2) {
+              descObjects.push({
+                name: name,
+                desc: desc
+              })
+              desc = '详情见下方注释: name'
+            }
+
             childContent += '{\n' +
               `  name: '${name}',\n` +
               `  method: '${result.method}',\n` +
-              `  desc: '${result.description || result.name}',\n` +
+              `  desc: '${desc || result.name}',\n` +
               `  path: '${result.path}',\n` +
               `  mockPath: '${result.path}',\n` +
               `  params: {${paramsStr}\n  },\n` +
