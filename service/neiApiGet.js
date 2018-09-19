@@ -312,12 +312,12 @@ function generateObjectTargetApi () {
 
             // 在这里对描述进行判断，如果描述过长，则进行省略的写法
             let desc = result.description
-            if (desc.split('\r\n').length >= 2) {
+            if (desc.split(/[\n]/g).length >= 2) {
               descObjects.push({
                 name: name,
                 desc: desc
               })
-              desc = '详情见下方注释: name'
+              desc = '详情见下方注释: ' + name
             }
 
             childContent += '{\n' +
@@ -335,14 +335,14 @@ function generateObjectTargetApi () {
 
           currentSuccessLen += 1
           if (currentSuccessLen === childLength) {
-            generateObjectTargetFile(name, fileContent, childrenObjects)
+            generateObjectTargetFile(name, fileContent, childrenObjects, descObjects)
           }
         })
     });
   })
 }
 
-function generateObjectTargetFile (name, content, children) {
+function generateObjectTargetFile (name, content, children, descObjects) {
   signale.info(name + '文件请求完成, 准备生成文件...')
   name = name.substring(0, 1).toLowerCase() + name.substring(1)
   let childContent = ''
@@ -352,6 +352,18 @@ function generateObjectTargetFile (name, content, children) {
   childContent = childContent.substring(0, childContent.lastIndexOf(','))
 
   content = content.replace('$REPLACE', childContent)
+  // 判断有没有注释要引入
+  if (descObjects.length > 0) {
+    content += '\n'
+    content += '/************\n'
+    content += '下方为接口的描述详情, 请根据相应的接口名称寻找描述详情\n\n'
+    descObjects.forEach(item => {
+      content += item.name + '描述详情:\n'
+      content += item.desc + '\n\n'
+    })
+    content += '************/'
+  }
+
   let target = filePaths.downloadPath + '/' + name + '.js'
   if (fs.existsSync(target)) {
     fs.unlinkSync(target)
