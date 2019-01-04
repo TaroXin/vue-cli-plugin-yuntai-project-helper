@@ -157,9 +157,9 @@ function mergeSelectedFiles () {
   const sourceDir = fs.readdirSync(filePaths.compressPath)[0]
   let sourceFiles = null
   if (userAnswer.iconTarget === 'css') {
-    sourceFiles = ['iconfont.css', 'iconfont.ttf', 'demo_fontclass.html']
+    sourceFiles = ['iconfont.css', 'iconfont.ttf', 'demo_index.html']
   } else if (userAnswer.iconTarget === 'svg') {
-    sourceFiles = ['iconfont.js', 'demo_symbol.html']
+    sourceFiles = ['iconfont.js', 'demo_index.html']
   }
 
   sourceFiles.forEach(fileName => {
@@ -204,14 +204,14 @@ function generateIconJson (iconPath, parent) {
   let html = path.resolve('.', parent + '/' + iconPath)
   let options = { decodeEntities: false }
   let $ = cheerio.load(fs.readFileSync(html), options)
-  let iconList = $('.icon_lists').eq(0).find('li')
+  let iconList = $('.icon_lists').eq(1).find('li')
   let iconContent = `export default [$REPLACE];\n`
   let iconObjects = []
   iconList.each((index, element) => {
     iconObjects.push(
       `{\n` +
-      `  name: '${$(element).find('.name').eq(0).html()}',\n` +
-      `  fontclass: '${$(element).find('.fontclass').eq(0).html()}',\n` +
+      `  name: '${$(element).find('.name').eq(0).html().trim()}',\n` +
+      `  fontclass: '${$(element).find('.code-name').eq(0).html().trim().substring(1)}',\n` +
       `}`
     )
   })
