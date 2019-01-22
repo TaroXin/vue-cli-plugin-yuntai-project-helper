@@ -1,6 +1,6 @@
 const fs = require('fs')
 const path = require('path')
-const http = require('http')
+const request = require('request')
 const compressing = require('compressing')
 const signale = require('signale')
 const inquirer = require('inquirer')
@@ -13,7 +13,7 @@ const filePaths = {
   filename: '/cache.zip',
 }
 const yuntaiConfig = JSON.parse(fs.readFileSync(filePaths.configPath, { encoding: 'utf-8' }))
-const downloadUrl = 'http://www.iconfont.cn/api/project/download.zip?'
+const downloadUrl = 'https://www.iconfont.cn/api/project/download.zip?'
 let userAnswer = null
 
 module.exports = (api, projectOptions, args) => {
@@ -105,31 +105,22 @@ function download () {
 
   let interactive = new signale.Signale({interactive: true, scope: 'download'})
   interactive.await('正在下载')
-  const options = {
-    hostname: 'www.iconfont.cn',
-    port: 80,
-    path: `/api/project/download.zip?ctoken=${yuntaiConfig.api_cookies.ctoken}&pid=${iconGroup}`,
-    method: 'GET',
+
+  let options = {
+    url: downloadUrl + 'ctoken=' + yuntaiConfig.api_cookies.ctoken + '&pid=' + iconGroup,
     headers: {
-        'Cookie': `EGG_SESS_ICONFONT=${yuntaiConfig.api_cookies.EGG_SESS_ICONFONT}`
+      ...yuntaiConfig.api_base_headers,
+      'Cookie': `EGG_SESS_ICONFONT=${yuntaiConfig.api_cookies.EGG_SESS_ICONFONT}`
     }
   }
 
-  http.get(options, function (res) {
-    res.on('data', data => {
-      file.write(data);
-    });
-
-    res.on('progress', data => {
-      console.log(data)
-    })
-
-    res.on('end', _ => {
-      file.end();
+  request(options).pipe(file).on('close', (err) => {
+    if (!err) {
       interactive.success('文件下载成功, 准备解压')
-      interactive = null
       unzipCache(filePaths.downloadPath + filePaths.filename)
-    })
+    } else {
+      interactive.error(err)
+    }
   })
 }
 
@@ -143,6 +134,7 @@ function unzipCache (path) {
   }).catch(err => {
     interactive.error(err)
   })
+
 }
 
 // 解析文件，查找是否存在目标文件夹
